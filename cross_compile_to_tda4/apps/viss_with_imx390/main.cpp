@@ -92,16 +92,6 @@ int main()
 
     tivx_raw_image input = createRawImage(context, RAW_IMG_WIDTH, RAW_IMG_HEIGHT);
 
-    std::array<vx_image, VISS_OUT_NUM> listOfOutputImages;
-    listOfOutputImages.at(0U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_NV12);
-    listOfOutputImages.at(1U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_UYVY);
-
-    vx_node viss_node;
-    if (viss_node = vxCreateVissWithImx390Node(graph, context, input, listOfOutputImages); vxGetStatus(reinterpret_cast<vx_reference>(viss_node)) != VX_SUCCESS)
-    {
-        std::cout << "Failed to create viss node" << std::endl;
-    }
-
     const vx_rectangle_t rect = {0, 0, IMG_WIDTH, IMG_HEIGHT};
     vx_imagepatch_addressing_t addr;
     vx_map_id map_id;
@@ -132,6 +122,33 @@ int main()
 
     tivxUnmapRawImagePatch(input, map_id);
 
+    std::array<vx_image, VISS_OUT_NUM> listOfOutputImages;
+    listOfOutputImages.at(0U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_NV12);
+    listOfOutputImages.at(1U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_UYVY);
+
+    vx_imagepatch_addressing_t addr2;
+    vx_map_id map_id2;
+    void *ptr2;
+
+    if (vxMapImagePatch(listOfOutputImages.at(0U), &rect, 0, &map_id2, &addr2, &ptr2, VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0) != VX_SUCCESS)
+    {
+        std::cout << "Failed to map output image" << std::endl;
+        std::runtime_error("Failed to map output image");
+    }
+
+    cv::Mat imageOutput0(IMG_HEIGHT, IMG_WIDTH, CV_8UC1, ptr2, addr2.stride_y);
+    imageOutput0.setTo(0);
+
+    memcpy(imageOutput0.data, ptr2, imageOutput0.total() * imageOutput0.elemSize());
+
+    vxUnmapImagePatch(listOfOutputImages.at(0U), map_id2);
+
+    vx_node viss_node;
+    if (viss_node = vxCreateVissWithImx390Node(graph, context, input, listOfOutputImages); vxGetStatus(reinterpret_cast<vx_reference>(viss_node)) != VX_SUCCESS)
+    {
+        std::cout << "Failed to create viss node" << std::endl;
+    }
+
     if (auto result = vxSetNodeTarget(viss_node, VX_TARGET_STRING, TIVX_TARGET_VPAC_VISS1); result != VX_SUCCESS)
     {
         std::cout << "Failed to set node targets" << std::endl;
@@ -147,6 +164,8 @@ int main()
     {
         vxProcessGraph(graph);
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+        cv::imwrite("/tmp/output0.png", imageOutput0);
         std::cout << "running. frame-index: " << frameCount++ << std::endl;
     }
 
