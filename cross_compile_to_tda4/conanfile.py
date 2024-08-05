@@ -18,7 +18,7 @@ class hello_world_tda4Recipe(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
 
     # Sources are located in the same place as this recipe, copy them to the recipe
-    exports_sources = "CMakeLists.txt", "src/*", "common/*", "first_test_app/*"
+    exports_sources = "CMakeLists.txt", "src/*", "common/*", "apps/*"
 
     def layout(self):
         cmake_layout(self)

@@ -1,0 +1,2 @@
+add_subdirectory(viss_with_imx390)
+add_subdirectory(first_test_app)
