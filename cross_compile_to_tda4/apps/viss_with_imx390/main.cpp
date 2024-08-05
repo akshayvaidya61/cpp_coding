@@ -21,6 +21,34 @@ extern "C"
 #include "TI/tivx_log_rt.h"
 }
 
+static constexpr uint32_t AE_GAIN_MAGIC_VALUE = 1030;
+static constexpr uint32_t AE_EXPOSURE_TIME_MAGIC_VALUE = 16666;
+static constexpr uint32_t AWB_TEMPERATURE_MAGIC_VALUE = 3000;
+static constexpr uint32_t AWB_GAIN_MAGIC_VALUE = 525;
+static constexpr uint32_t AWB_OFFSET_MAGIC_VALUE = 2;
+static constexpr uint32_t META_HEIGHT_AFTER = 4;
+static constexpr uint32_t NUM_EXPOSURES = 1;
+static constexpr uint32_t MSB_16_BIT = 11;
+static constexpr uint32_t META_HEIGHT_BEFORE = 0;
+static constexpr const char *H3A_DATA_OBJECT_NAME = "tivx_h3a_data_t";
+static constexpr size_t H3A_DATA_OBJECT_SIZE = sizeof(tivx_h3a_data_t);
+static constexpr const char *CONFIGURATION_OBJECT_NAME = "tivx_vpac_viss_params_t";
+static constexpr size_t CONFIGURATION_OBJECT_SIZE = sizeof(tivx_vpac_viss_params_t);
+static constexpr const char *AE_AWB_RESULT_OBJECT_NAME = "tivx_ae_awb_params_t";
+static constexpr size_t AE_AWB_RESULT_OBJECT_SIZE = sizeof(tivx_ae_awb_params_t);
+static constexpr const char *DCC_PARAM_VISS_OBJECT_NAME = "dcc_viss";
+static constexpr auto VISS_TARGET = TIVX_TARGET_VPAC_VISS1;
+static constexpr auto VISS_H3A_IN_LSC = TIVX_VPAC_VISS_H3A_IN_LSC;
+static constexpr auto VISS_H3A_MODE_AEWB = TIVX_VPAC_VISS_H3A_MODE_AEWB;
+static constexpr auto VISS_SENSOR_DCC_ID_390 = 390;
+static constexpr auto VISS_EE_MODE_OFF = TIVX_VPAC_VISS_EE_MODE_OFF;
+static constexpr auto VISS_MUX2_NV12 = TIVX_VPAC_VISS_MUX2_NV12;
+static constexpr auto VISS_CHROMA_MODE_420 = TIVX_VPAC_VISS_CHROMA_MODE_420;
+static constexpr auto VISS_MUX2_YUV422 = TIVX_VPAC_VISS_MUX2_YUV422;
+static constexpr auto VISS_CHROMA_MODE_422 = TIVX_VPAC_VISS_CHROMA_MODE_422;
+static constexpr auto RAW_IMG_WIDTH = 1936;
+static constexpr auto RAW_IMG_HEIGHT = 1096;
+
 bool isExitRequested = false;
 void signal_handler(int signal)
 {
@@ -28,6 +56,9 @@ void signal_handler(int signal)
 }
 
 vx_node const vxCreateVissWithImx390Node(vx_graph, vx_context);
+vx_user_data_object createDccParamViss(vx_context context, const char *sensor_name, uint32_t sensor_dcc_mode);
+vx_user_data_object createAeAwbResult(vx_context context);
+vx_user_data_object createH3aAewAf(vx_context context);
 
 int main()
 {
@@ -97,12 +128,6 @@ vx_user_data_object createDccParamViss(vx_context context, const char *sensor_na
     return dcc_param_viss;
 }
 
-static constexpr uint32_t AE_GAIN_MAGIC_VALUE = 1030;
-static constexpr uint32_t AE_EXPOSURE_TIME_MAGIC_VALUE = 16666;
-static constexpr uint32_t AWB_TEMPERATURE_MAGIC_VALUE = 3000;
-static constexpr uint32_t AWB_GAIN_MAGIC_VALUE = 525;
-static constexpr uint32_t AWB_OFFSET_MAGIC_VALUE = 2;
-
 vx_user_data_object createAeAwbResult(vx_context context)
 {
     tivx_ae_awb_params_t ae_awb_params;
@@ -121,11 +146,6 @@ vx_user_data_object createAeAwbResult(vx_context context)
 
     return vxCreateUserDataObject(context, "tivx_ae_awb_params_t", sizeof(tivx_ae_awb_params_t), &ae_awb_params);
 }
-
-static constexpr uint32_t META_HEIGHT_AFTER = 4;
-static constexpr uint32_t NUM_EXPOSURES = 1;
-static constexpr uint32_t MSB_16_BIT = 11;
-static constexpr uint32_t META_HEIGHT_BEFORE = 0;
 
 tivx_raw_image createRawImage(vx_context context, vx_uint32 width, vx_uint32 height)
 {
@@ -147,9 +167,6 @@ tivx_raw_image createRawImage(vx_context context, vx_uint32 width, vx_uint32 hei
     return tivxCreateRawImage(context, &raw_params);
 }
 
-static constexpr const char *H3A_DATA_OBJECT_NAME = "tivx_h3a_data_t";
-static constexpr size_t H3A_DATA_OBJECT_SIZE = sizeof(tivx_h3a_data_t);
-
 vx_user_data_object createH3aAewAf(vx_context context)
 {
     vx_user_data_object h3a_aew_af = vxCreateUserDataObject(context, H3A_DATA_OBJECT_NAME, H3A_DATA_OBJECT_SIZE, nullptr);
@@ -166,12 +183,6 @@ vx_user_data_object createH3aAewAf(vx_context context)
     return h3a_aew_af;
 }
 
-static constexpr const char *CONFIGURATION_OBJECT_NAME = "tivx_vpac_viss_params_t";
-static constexpr size_t CONFIGURATION_OBJECT_SIZE = sizeof(tivx_vpac_viss_params_t);
-static constexpr const char *AE_AWB_RESULT_OBJECT_NAME = "tivx_ae_awb_params_t";
-static constexpr size_t AE_AWB_RESULT_OBJECT_SIZE = sizeof(tivx_ae_awb_params_t);
-static constexpr const char *DCC_PARAM_VISS_OBJECT_NAME = "dcc_viss";
-
 vx_node createVissNode(vx_graph graph, vx_context context, const tivx_vpac_viss_params_t *params, tivx_raw_image raw, vx_image y8_r8_c2)
 {
     vx_user_data_object configuration = vxCreateUserDataObject(context, CONFIGURATION_OBJECT_NAME, CONFIGURATION_OBJECT_SIZE, params);
@@ -181,18 +192,6 @@ vx_node createVissNode(vx_graph graph, vx_context context, const tivx_vpac_viss_
 
     return tivxVpacVissNode(graph, configuration, ae_awb_result, dcc_param_viss, raw, NULL, NULL, y8_r8_c2, NULL, NULL, h3a_aew_af, NULL, NULL, NULL);
 }
-
-static constexpr auto VISS_TARGET = TIVX_TARGET_VPAC_VISS1;
-static constexpr auto VISS_H3A_IN_LSC = TIVX_VPAC_VISS_H3A_IN_LSC;
-static constexpr auto VISS_H3A_MODE_AEWB = TIVX_VPAC_VISS_H3A_MODE_AEWB;
-static constexpr auto VISS_SENSOR_DCC_ID_390 = 390;
-static constexpr auto VISS_EE_MODE_OFF = TIVX_VPAC_VISS_EE_MODE_OFF;
-static constexpr auto VISS_MUX2_NV12 = TIVX_VPAC_VISS_MUX2_NV12;
-static constexpr auto VISS_CHROMA_MODE_420 = TIVX_VPAC_VISS_CHROMA_MODE_420;
-static constexpr auto VISS_MUX2_YUV422 = TIVX_VPAC_VISS_MUX2_YUV422;
-static constexpr auto VISS_CHROMA_MODE_422 = TIVX_VPAC_VISS_CHROMA_MODE_422;
-static constexpr auto RAW_IMG_WIDTH = 1936;
-static constexpr auto RAW_IMG_HEIGHT = 1096;
 
 vx_node const vxCreateVissWithImx390Node(vx_graph currentGraph, vx_context currentContext)
 {
