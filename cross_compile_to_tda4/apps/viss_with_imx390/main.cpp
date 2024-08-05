@@ -1,8 +1,11 @@
 #include <array>
+#include <vector>
 #include <string>
 #include <iostream>
 #include <thread>
 #include <csignal>
+#include <fstream>
+#include <ios>
 
 #include "opencv2/imgcodecs.hpp"
 
@@ -68,7 +71,7 @@ int main()
 {
 
     std::signal(SIGINT, signal_handler);
-    std::string filename;
+    std::string const filename = "/tmp/input2.raw";
 
     appInit();
     tivxInit();
@@ -90,14 +93,44 @@ int main()
     tivx_raw_image input = createRawImage(context, RAW_IMG_WIDTH, RAW_IMG_HEIGHT);
 
     std::array<vx_image, VISS_OUT_NUM> listOfOutputImages;
-    listOfOutputImages.at(0) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_NV12);
-    listOfOutputImages.at(1) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_UYVY);
+    listOfOutputImages.at(0U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_NV12);
+    listOfOutputImages.at(1U) = vxCreateImage(context, IMG_WIDTH, IMG_HEIGHT, VX_DF_IMAGE_UYVY);
 
     vx_node viss_node;
     if (viss_node = vxCreateVissWithImx390Node(graph, context, input, listOfOutputImages); vxGetStatus(reinterpret_cast<vx_reference>(viss_node)) != VX_SUCCESS)
     {
         std::cout << "Failed to create viss node" << std::endl;
     }
+
+    const vx_rectangle_t rect = {0, 0, IMG_WIDTH, IMG_HEIGHT};
+    vx_imagepatch_addressing_t addr;
+    vx_map_id map_id;
+    void *ptr;
+
+    if (tivxMapRawImagePatch(input, &rect, 0, &map_id, &addr, &ptr, VX_WRITE_ONLY, VX_MEMORY_TYPE_HOST, tivx_raw_image_buffer_access_e::TIVX_RAW_IMAGE_PIXEL_BUFFER) != VX_SUCCESS)
+    {
+        std::cout << "Failed to map input image" << std::endl;
+        throw std::runtime_error("Failed to map input image");
+    }
+
+    std::fstream image_file;
+    image_file.open(filename, std::ios::in | std::ios::binary);
+    if (!image_file.is_open())
+    {
+        std::cout << "Failed to open image file" << std::endl;
+        std::runtime_error("Failed to open image file");
+    }
+
+    image_file.seekg(0, std::ios::end);
+    size_t image_size = image_file.tellg();
+    image_file.seekg(0, std::ios::beg);
+    std::vector<uint8_t> image(image_size);
+    image_file.read(reinterpret_cast<char *>(image.data()), image_size);
+    image_file.close();
+
+    memcpy(ptr, image.data(), image_size);
+
+    tivxUnmapRawImagePatch(input, map_id);
 
     if (auto result = vxSetNodeTarget(viss_node, VX_TARGET_STRING, TIVX_TARGET_VPAC_VISS1); result != VX_SUCCESS)
     {
