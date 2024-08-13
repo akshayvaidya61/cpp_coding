@@ -38,7 +38,7 @@ int main()
     vx_image listOfInputImages[BATCH_SIZE];
     for (auto &input : listOfInputImages)
     {
-        if (input = vxCreateImage(context, 1280, 960, VX_DF_IMAGE_U8); vxGetStatus(reinterpret_cast<vx_reference>(input)) != VX_SUCCESS)
+        if (input = vxCreateImage(context, 1280 * 2, 960 * 2, VX_DF_IMAGE_U8); vxGetStatus(reinterpret_cast<vx_reference>(input)) != VX_SUCCESS)
         {
             std::cout << "Failed to create input image" << std::endl;
         }
@@ -111,7 +111,7 @@ int main()
     // Schedule config telling which paramters to enqueue to
     vxSetGraphScheduleConfig(
         graph,
-        VX_GRAPH_SCHEDULE_MODE_QUEUE_MANUAL,
+        VX_GRAPH_SCHEDULE_MODE_QUEUE_AUTO,
         BATCH_SIZE,
         graph_parameters_queue_params_list);
 
@@ -133,14 +133,6 @@ int main()
     // Processing of the graph
     while (!isExitRequested)
     {
-        // SCHEDULE THE GRAPH
-        if (vxScheduleGraph(graph) != VX_SUCCESS)
-        {
-            std::cout << "Failed to schedule graph" << std::endl;
-            std::runtime_error("Failed to schedule graph");
-        }
-
-        vxWaitGraph(graph);
 
         vxGraphParameterDequeueDoneRef(graph, INPUT_GRAPH_PARAM_INDEX, reinterpret_cast<vx_reference *>(&input_done), 1, NULL);
         vxGraphParameterDequeueDoneRef(graph, OUTPUT_GRAPH_PARAM_INDEX, reinterpret_cast<vx_reference *>(&output_done), 1, NULL);
