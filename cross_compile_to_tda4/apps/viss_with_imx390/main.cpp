@@ -21,6 +21,7 @@ extern "C"
 #include "tiovx/utils/include/tivx_utils_file_rd_wr.h"
 #include "imaging/utils/iss/include/app_iss.h"
 #include "app_utils/utils/mem/include/app_mem.h"
+#include "video_io/kernels/include/TI/video_io_display_m2m.h"
 #include "TI/tivx_log_rt.h"
 }
 
@@ -55,11 +56,33 @@ static constexpr auto IMG_HEIGHT = 1096U;
 static constexpr auto IMG_WIDTH = 1936U;
 static constexpr auto VISS_OUT_NUM = 2U;
 
+constexpr static uint32_t DSS_M2M_NUM_CH = 2U;
+constexpr static uint32_t DSS_M2M_NUM_CH_MAX = 4U;
+
+/* Common Configurations across channels */
+constexpr static uint32_t DSS_M2M_WB_PIPE_INST_ID = 0U;
+constexpr static uint32_t DSS_M2M_PIPE_NUM = 1U;
+constexpr static uint32_t DSS_M2M_PIPE_INST_ID = 3U;
+/* Currently Only Overlay2 can be used for M2M operations,
+   this can be changed through DSS initialization API available in vision_apps */
+constexpr static uint32_t DSS_M2M_OVERLAY_ID = 3U;
+
+/* Channel 0 configurations */
+constexpr static vx_df_image DSS_M2M_CH0_IN_FRAME_FORMAT = VX_DF_IMAGE_YUYV;
+constexpr static uint32_t DSS_M2M_CH0_IN_FRAME_WIDTH = 1920U;
+constexpr static uint32_t DSS_M2M_CH0_IN_FRAME_HEIGHT = 1080U;
+constexpr static uint32_t DSS_M2M_CH0_IN_FRAME_BPP = 2U;
+constexpr static uint32_t DSS_M2M_CH0_IN_FRAME_PITCH = DSS_M2M_CH0_IN_FRAME_WIDTH * DSS_M2M_CH0_IN_FRAME_BPP;
+constexpr static vx_df_image DSS_M2M_CH0_OUT_FRAME_FORMAT = VX_DF_IMAGE_NV12;
+constexpr static uint32_t DSS_M2M_CH0_OUT_FRAME_WIDTH = 1920U;
+constexpr static uint32_t DSS_M2M_CH0_OUT_FRAME_HEIGHT = 1080U;
+
 vx_node const vxCreateVissWithImx390Node(vx_graph, vx_context, tivx_raw_image, std::array<vx_image, VISS_OUT_NUM>);
 vx_user_data_object createDccParamViss(vx_context context, const char *sensor_name, uint32_t sensor_dcc_mode);
 vx_user_data_object createAeAwbResult(vx_context context);
 vx_user_data_object createH3aAewAf(vx_context context);
 tivx_raw_image createRawImage(vx_context context, vx_uint32 width, vx_uint32 height);
+vx_node vxCreateDssM2mNode(vx_graph, vx_context, vx_image, vx_image);
 
 bool isExitRequested = false;
 void signal_handler(int signal)
@@ -71,7 +94,7 @@ int main()
 {
 
     std::signal(SIGINT, signal_handler);
-    std::string const filename = "/tmp/input2.raw";
+    std::string const filename = "/opt/input2.raw";
 
     appInit();
     tivxInit();
@@ -143,6 +166,37 @@ int main()
 
     vxUnmapImagePatch(listOfOutputImages.at(0U), map_id2);
 
+    // Map output2 UV plane
+    if (vxMapImagePatch(listOfOutputImages.at(0U), &rect, 1, &map_id2, &addr2, &ptr2, VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0) != VX_SUCCESS)
+    {
+        std::cout << "Failed to map output image" << std::endl;
+    }
+
+    cv::Mat imageOutput1(IMG_HEIGHT, IMG_WIDTH, CV_8UC1, ptr2, addr2.stride_y);
+    imageOutput1.setTo(0);
+
+    memcpy(imageOutput1.data, ptr2, imageOutput1.total() * imageOutput1.elemSize());
+
+    vxUnmapImagePatch(listOfOutputImages.at(0U), map_id2);
+
+    // Map Y plane of the YUV422
+    // Map output2 UV plane
+
+    vx_imagepatch_addressing_t addr3;
+    vx_map_id map_id3;
+    void *ptr3;
+    if (vxMapImagePatch(listOfOutputImages.at(1U), &rect, 0, &map_id3, &addr3, &ptr3, VX_READ_ONLY, VX_MEMORY_TYPE_HOST, 0) != VX_SUCCESS)
+    {
+        std::cout << "Failed to map output image" << std::endl;
+    }
+
+    cv::Mat imageOutput2(IMG_HEIGHT, IMG_WIDTH, CV_8UC1, ptr2, addr3.stride_y);
+    imageOutput2.setTo(0);
+
+    memcpy(imageOutput2.data, ptr3, imageOutput2.total() * imageOutput2.elemSize());
+
+    vxUnmapImagePatch(listOfOutputImages.at(1U), map_id3);
+
     vx_node viss_node;
     if (viss_node = vxCreateVissWithImx390Node(graph, context, input, listOfOutputImages); vxGetStatus(reinterpret_cast<vx_reference>(viss_node)) != VX_SUCCESS)
     {
@@ -153,6 +207,13 @@ int main()
     {
         std::cout << "Failed to set node targets" << std::endl;
     }
+
+    // vx_node dss_m2m_node;
+    // vx_image dss_output;
+    // if (dss_m2m_node = vxCreateDssM2mNode(graph, context, listOfOutputImages.at(0U), dss_output); vxGetStatus(reinterpret_cast<vx_reference>(dss_m2m_node)) != VX_SUCCESS)
+    // {
+    //     std::cout << "Failed to create dss m2m node" << std::endl;
+    // }
 
     if (auto result = vxVerifyGraph(graph); result != VX_SUCCESS)
     {
@@ -166,6 +227,8 @@ int main()
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         cv::imwrite("/tmp/output0.png", imageOutput0);
+        cv::imwrite("/tmp/output1.png", imageOutput1);
+        cv::imwrite("/tmp/output2.png", imageOutput2);
         std::cout << "running. frame-index: " << frameCount++ << std::endl;
     }
 
@@ -173,6 +236,24 @@ int main()
 
     tivxDeInit();
     appDeInit();
+}
+
+vx_node vxCreateDssM2mNode(vx_graph currentGraph, vx_context currentContext, vx_image input, vx_image output)
+{
+    tivx_display_m2m_params_t local_m2m_config;
+    tivx_display_m2m_params_init(&local_m2m_config);
+    local_m2m_config.instId = DSS_M2M_WB_PIPE_INST_ID;
+    /* Only one pipeline is supported */
+    local_m2m_config.numPipe = DSS_M2M_PIPE_NUM;
+    local_m2m_config.pipeId[0U] = DSS_M2M_PIPE_INST_ID;
+    local_m2m_config.overlayId = DSS_M2M_OVERLAY_ID;
+
+    vx_user_data_object m2m_config = vxCreateUserDataObject(currentContext,
+                                                            "tivx_display_m2m_params_t",
+                                                            sizeof(tivx_display_m2m_params_t),
+                                                            &local_m2m_config);
+
+    return tivxDisplayM2MNode(currentGraph, m2m_config, input, output);
 }
 
 vx_user_data_object createDccParamViss(vx_context context, const char *sensor_name, uint32_t sensor_dcc_mode)

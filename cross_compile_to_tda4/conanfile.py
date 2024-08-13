@@ -37,5 +37,7 @@ class hello_world_tda4Recipe(ConanFile):
     def package(self):
         cmake = CMake(self)
         cmake.install()
-
     
+    def requirements(self):
+        self.requires("boost/1.80.0")
+            

@@ -1,0 +1,2 @@
+add_subdirectory(sender_app)
+add_subdirectory(receiver_app)

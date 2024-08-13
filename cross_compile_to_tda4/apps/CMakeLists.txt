@@ -1,2 +1,3 @@
 add_subdirectory(viss_with_imx390)
 add_subdirectory(first_test_app)
+add_subdirectory(export_handle_across)
